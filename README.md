@@ -60,7 +60,7 @@ node index.js
 
 ### Primeira vez (pareamento)
 1. Rode o bot
-2. Digite seu número com DDD e código do país (ex: `5518981938689`)
+2. Digite seu número com DDD e código do país (ex: `551111111111111`)
 3. O bot exibe um código de 8 dígitos
 4. No WhatsApp: **Aparelhos conectados > Conectar com número de telefone**
 5. Digite o código exibido no terminal
