@@ -85,9 +85,59 @@ async function recordAudio() {
     return oggPath;
 }
 
-async function menuFigurinha(sock, group) {
-    const participants = group.participants.map(p => p.id);
+async function menuAlvo(group) {
+    const todos = group.participants;
+    const admins = todos.filter(p => p.admin === 'admin' || p.admin === 'superadmin');
+    const membros = todos.filter(p => !p.admin);
 
+    console.log('\nQuem deseja marcar?');
+    console.log(`  (1) Todos — ${todos.length} pessoas`);
+    console.log(`  (2) Somente admins — ${admins.length} pessoas`);
+    console.log(`  (3) Somente membros — ${membros.length} pessoas`);
+    console.log(`  (4) Todos exceto 1 membro aleatório — ${todos.length - 1} pessoas`);
+    console.log('  (v) Voltar');
+
+    const op = await question('Escolha: ');
+
+    if (op.trim().toLowerCase() === 'v') return null;
+
+    if (op.trim() === '1') {
+        return todos.map(p => p.id);
+    }
+
+    if (op.trim() === '2') {
+        if (!admins.length) {
+            console.log('❌ Nenhum admin encontrado.');
+            return menuAlvo(group);
+        }
+        return admins.map(p => p.id);
+    }
+
+    if (op.trim() === '3') {
+        if (!membros.length) {
+            console.log('❌ Nenhum membro comum encontrado.');
+            return menuAlvo(group);
+        }
+        return membros.map(p => p.id);
+    }
+
+    if (op.trim() === '4') {
+        if (todos.length <= 1) {
+            console.log('❌ Grupo com apenas 1 pessoa.');
+            return menuAlvo(group);
+        }
+        const lista = [...todos];
+        const randomIdx = Math.floor(Math.random() * lista.length);
+        const removido = lista.splice(randomIdx, 1)[0];
+        console.log(`🎲 Removido aleatoriamente: ${removido.id.split('@')[0]}`);
+        return lista.map(p => p.id);
+    }
+
+    console.log('Opção inválida.');
+    return menuAlvo(group);
+}
+
+async function menuFigurinha(sock, group, participants) {
     console.log('\nFigurinha — origem:\n  (1) Pasta ./stickers\n  (2) Galeria\n  (v) Voltar');
     const origem = await question('Escolha: ');
 
@@ -97,17 +147,17 @@ async function menuFigurinha(sock, group) {
         const stickers = getRecentStickers();
         if (!stickers.length) {
             console.log('Nenhuma figurinha em ./stickers');
-            return menuFigurinha(sock, group);
+            return menuFigurinha(sock, group, participants);
         }
         console.log('\n🗂 Figurinhas:');
         stickers.forEach((s, i) => console.log(`  [${i}] ${s.name}`));
         console.log('  (v) Voltar');
 
         const idx = await question('\nEscolha: ');
-        if (idx.trim().toLowerCase() === 'v') return menuFigurinha(sock, group);
+        if (idx.trim().toLowerCase() === 'v') return menuFigurinha(sock, group, participants);
 
         const sticker = stickers[parseInt(idx)];
-        if (!sticker) { console.log('Inválido.'); return menuFigurinha(sock, group); }
+        if (!sticker) { console.log('Inválido.'); return menuFigurinha(sock, group, participants); }
 
         const buffer = fs.readFileSync(sticker.full);
         await sock.sendMessage(group.id, { sticker: buffer, mentions: participants });
@@ -118,7 +168,7 @@ async function menuFigurinha(sock, group) {
 
         if (!filePath) {
             console.log('❌ Nenhum arquivo selecionado.');
-            return menuFigurinha(sock, group);
+            return menuFigurinha(sock, group, participants);
         }
 
         const outPath = './temp_sticker.webp';
@@ -128,7 +178,7 @@ async function menuFigurinha(sock, group) {
         } catch (e) {
             console.log('❌ Erro ao converter imagem.');
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-            return menuFigurinha(sock, group);
+            return menuFigurinha(sock, group, participants);
         }
 
         const buffer = fs.readFileSync(outPath);
@@ -139,15 +189,13 @@ async function menuFigurinha(sock, group) {
 
     } else {
         console.log('Opção inválida.');
-        return menuFigurinha(sock, group);
+        return menuFigurinha(sock, group, participants);
     }
 
     return null;
 }
 
-async function menuFotoVideo(sock, group) {
-    const participants = group.participants.map(p => p.id);
-
+async function menuFotoVideo(sock, group, participants) {
     console.log('\nEnviar:\n  (1) Foto\n  (2) Vídeo\n  (v) Voltar');
     const tipo = await question('Escolha: ');
 
@@ -158,19 +206,14 @@ async function menuFotoVideo(sock, group) {
 
         if (!filePath) {
             console.log('❌ Nenhuma foto selecionada.');
-            return menuFotoVideo(sock, group);
+            return menuFotoVideo(sock, group, participants);
         }
 
         const ext = path.extname(filePath).toLowerCase();
         const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
         const buffer = fs.readFileSync(filePath);
 
-        await sock.sendMessage(group.id, {
-            image: buffer,
-            mimetype: mime,
-            mentions: participants
-        });
-
+        await sock.sendMessage(group.id, { image: buffer, mimetype: mime, mentions: participants });
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         console.log('✅ Foto enviada com hidetag!');
 
@@ -179,29 +222,28 @@ async function menuFotoVideo(sock, group) {
 
         if (!filePath) {
             console.log('❌ Nenhum vídeo selecionado.');
-            return menuFotoVideo(sock, group);
+            return menuFotoVideo(sock, group, participants);
         }
 
         const buffer = fs.readFileSync(filePath);
-        await sock.sendMessage(group.id, {
-            video: buffer,
-            mimetype: 'video/mp4',
-            mentions: participants
-        });
-
+        await sock.sendMessage(group.id, { video: buffer, mimetype: 'video/mp4', mentions: participants });
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         console.log('✅ Vídeo enviado com hidetag!');
 
     } else {
         console.log('Opção inválida.');
-        return menuFotoVideo(sock, group);
+        return menuFotoVideo(sock, group, participants);
     }
 
     return null;
 }
 
 async function menuTipo(sock, group) {
-    const participants = group.participants.map(p => p.id);
+    // Escolhe alvo antes de qualquer envio
+    const participants = await menuAlvo(group);
+    if (!participants) return 'back';
+
+    console.log(`\n✅ ${participants.length} pessoa(s) serão marcadas.`);
 
     const tipo = await question('\nO que deseja enviar?\n  (1) Texto\n  (2) Figurinha\n  (3) Áudio\n  (4) Foto / Vídeo\n  (v) Voltar para grupos\nEscolha: ');
 
@@ -216,7 +258,7 @@ async function menuTipo(sock, group) {
         console.log('✅ Mensagem enviada com hidetag!');
 
     } else if (tipo.trim() === '2') {
-        const result = await menuFigurinha(sock, group);
+        const result = await menuFigurinha(sock, group, participants);
         if (result === 'back') return menuTipo(sock, group);
 
     } else if (tipo.trim() === '3') {
@@ -244,7 +286,7 @@ async function menuTipo(sock, group) {
         }
 
     } else if (tipo.trim() === '4') {
-        const result = await menuFotoVideo(sock, group);
+        const result = await menuFotoVideo(sock, group, participants);
         if (result === 'back') return menuTipo(sock, group);
 
     } else {
